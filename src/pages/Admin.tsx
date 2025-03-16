@@ -11,15 +11,32 @@ const Admin = () => {
 
   const handleLoadApplications = async () => {
     try {
+      // Show loading toast
+      toast.loading('Loading applications...');
+      
+      // Seed the data
       const result = await seedData();
+      
       if (result.success) {
         // Force a refresh of the merchant applications data
         await queryClient.invalidateQueries({ queryKey: ['merchantApplications'] });
+        
+        // Explicitly refetch the merchant applications
+        await queryClient.refetchQueries({ queryKey: ['merchantApplications'] });
+        
+        // Dismiss loading toast and show success
+        toast.dismiss();
         toast.success(result.message);
+        
+        console.log('Applications loaded successfully:', result.data);
       } else {
+        // Dismiss loading toast and show error
+        toast.dismiss();
         toast.error('Failed to load applications: ' + result.message);
       }
     } catch (error) {
+      // Dismiss loading toast and show error
+      toast.dismiss();
       toast.error('Error loading applications: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
@@ -27,23 +44,30 @@ const Admin = () => {
   return (
     <div className="min-h-screen pt-20 bg-gradient-to-b from-blue-50 to-slate-100 px-4 pb-12">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-slate-800">
-            Merchant Applications
-          </h1>
-          {isAdmin && (
-            <Button 
-              onClick={handleLoadApplications}
-              variant="outline"
-              className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-yellow-300"
-            >
-              🔄 Load Applications
-            </Button>
-          )}
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <AdminApplicationList />
-        </div>
+        {isAdmin ? (
+          <>
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-3xl font-bold text-slate-800">
+                Merchant Applications
+              </h1>
+              <Button 
+                onClick={handleLoadApplications}
+                variant="outline"
+                className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-yellow-300"
+              >
+                🔄 Load Applications
+              </Button>
+            </div>
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <AdminApplicationList />
+            </div>
+          </>
+        ) : (
+          <div className="text-center py-12">
+            <h1 className="text-3xl font-bold text-slate-800 mb-4">Admin Area</h1>
+            <p className="text-slate-600">Admin mode is currently disabled. Enable admin mode to view merchant applications.</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -174,27 +174,8 @@ export const seedData = async () => {
       }
     }
     
-    // Create default rocks for approved merchants
-    for (const app of applications.filter(a => a.status === 'approved')) {
-      if (app.merchant && typeof app.merchant === 'object' && 'name' in app.merchant) {
-        const merchantName = app.merchant.name as string;
-        console.log('Creating default rock for approved merchant:', merchantName);
-        
-        const { error: rockError } = await supabaseAdmin
-          .from('rocks')
-          .insert([{
-            name: `${merchantName}'s Default Rock`,
-            description: "A premium skipping rock with perfect balance",
-            is_greenlisted: true,
-            image_url: "https://example.com/default-rock.jpg",
-            merchant_application_id: app.merchant_application_id
-          }]);
-        
-        if (rockError) {
-          console.error('Error creating default rock:', rockError);
-        }
-      }
-    }
+    // We no longer automatically create rocks for approved merchants here
+    // Rocks will only be created when an admin explicitly approves a merchant in the UI
 
     return { 
       success: true, 

@@ -17,6 +17,12 @@ import { useEffect } from 'react';
 const AdminApplicationList = () => {
   const queryClient = useQueryClient();
   
+  // Add useEffect to fetch applications when component mounts
+  useEffect(() => {
+    // Trigger a refetch when the component mounts
+    queryClient.refetchQueries({ queryKey: ['merchantApplications'] });
+  }, [queryClient]);
+  
   const { data: applications, isLoading, error, refetch } = useQuery<MerchantAdmin[]>({
     queryKey: ['merchantApplications'],
     queryFn: async () => {
@@ -53,15 +59,11 @@ const AdminApplicationList = () => {
         throw error;
       }
     },
-    refetchOnMount: true,
+    // Enable the query to run automatically
+    enabled: true,
     refetchOnWindowFocus: true,
     staleTime: 0
   });
-  
-  // Automatically refetch when component mounts
-  useEffect(() => {
-    refetch();
-  }, [refetch]);
 
   const approveMutation = useMutation({
     mutationFn: async (applicationId: number) => {
@@ -75,11 +77,13 @@ const AdminApplicationList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['merchantApplications'] });
+      queryClient.invalidateQueries({ queryKey: ['rocks'] }); // Also invalidate rocks query
       toast.success('Merchant application approved successfully');
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
       console.error('Approve mutation error:', error);
-      toast.error('Failed to approve merchant: ' + error.message);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error('Failed to approve merchant: ' + errorMessage);
     },
   });
 
@@ -95,11 +99,13 @@ const AdminApplicationList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['merchantApplications'] });
+      queryClient.invalidateQueries({ queryKey: ['rocks'] }); // Also invalidate rocks query
       toast.success('Merchant application unapproved successfully');
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       console.error('Unapprove mutation error:', error);
-      toast.error('Failed to unapprove merchant: ' + (error instanceof Error ? error.message : String(error)));
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error('Failed to unapprove merchant: ' + errorMessage);
     },
   });
 
@@ -115,11 +121,13 @@ const AdminApplicationList = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['merchantApplications'] });
+      queryClient.invalidateQueries({ queryKey: ['rocks'] }); // Also invalidate rocks query
       toast.success('Application rejected');
     },
-    onError: (error) => {
+    onError: (error: unknown) => {
       console.error('Reject mutation error:', error);
-      toast.error('Failed to reject application: ' + (error instanceof Error ? error.message : String(error)));
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast.error('Failed to reject application: ' + errorMessage);
     },
   });
 
