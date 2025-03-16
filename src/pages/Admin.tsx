@@ -4,15 +4,31 @@ import { seedData } from '@/lib/seedData';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAdmin } from '@/contexts/AdminContext';
+import { useEffect, useRef } from 'react';
 
 const Admin = () => {
   const queryClient = useQueryClient();
   const { isAdmin } = useAdmin();
 
+  // Clear merchant applications data when admin mode changes
+  useEffect(() => {
+    if (!isAdmin) {
+      // Clear the merchant applications data when admin mode is turned off
+      queryClient.setQueryData(['merchantApplications'], []);
+      console.log('Admin mode turned off - cleared merchant applications data');
+    }
+  }, [isAdmin, queryClient]);
+
+  // Reference to the AdminApplicationList component
+  const adminListRef = useRef<{ refetch: () => Promise<any> } | null>(null);
+
   const handleLoadApplications = async () => {
     try {
       // Show loading toast
       toast.loading('Loading applications...');
+      
+      // Clear any existing data first
+      queryClient.setQueryData(['merchantApplications'], []);
       
       // Seed the data
       const result = await seedData();
@@ -22,7 +38,12 @@ const Admin = () => {
         await queryClient.invalidateQueries({ queryKey: ['merchantApplications'] });
         
         // Explicitly refetch the merchant applications
-        await queryClient.refetchQueries({ queryKey: ['merchantApplications'] });
+        await queryClient.refetchQueries({ queryKey: ['merchantApplications'], exact: true });
+        
+        // Directly trigger refetch on the AdminApplicationList component
+        if (adminListRef.current) {
+          await adminListRef.current.refetch();
+        }
         
         // Dismiss loading toast and show success
         toast.dismiss();
@@ -59,7 +80,7 @@ const Admin = () => {
               </Button>
             </div>
             <div className="bg-white rounded-lg shadow-md p-6">
-              <AdminApplicationList />
+              <AdminApplicationList ref={adminListRef} />
             </div>
           </>
         ) : (

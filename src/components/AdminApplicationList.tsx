@@ -12,16 +12,10 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 
-const AdminApplicationList = () => {
+const AdminApplicationList = forwardRef((props, ref) => {
   const queryClient = useQueryClient();
-  
-  // Add useEffect to fetch applications when component mounts
-  useEffect(() => {
-    // Trigger a refetch when the component mounts
-    queryClient.refetchQueries({ queryKey: ['merchantApplications'] });
-  }, [queryClient]);
   
   const { data: applications, isLoading, error, refetch } = useQuery<MerchantAdmin[]>({
     queryKey: ['merchantApplications'],
@@ -59,11 +53,19 @@ const AdminApplicationList = () => {
         throw error;
       }
     },
-    // Enable the query to run automatically
-    enabled: true,
-    refetchOnWindowFocus: true,
+    // Disable automatic fetching - only fetch when explicitly triggered
+    enabled: false,
+    refetchOnWindowFocus: false,
     staleTime: 0
   });
+
+  // Expose the refetch function to the parent component
+  useImperativeHandle(ref, () => ({
+    refetch: async () => {
+      console.log('Refetching merchant applications from parent component');
+      return refetch();
+    }
+  }));
 
   // State to track local application status changes
   const [localApplicationStatus, setLocalApplicationStatus] = useState<Record<number, string>>({});
@@ -241,6 +243,6 @@ const AdminApplicationList = () => {
       </Table>
     </div>
   );
-};
+});
 
 export default AdminApplicationList;
