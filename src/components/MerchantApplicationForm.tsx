@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { submitMerchantApplication } from '@/lib/api';
 import { toast } from 'sonner';
 import {
@@ -21,17 +23,47 @@ interface MerchantFormData {
 
 const MerchantApplicationForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const form = useForm<MerchantFormData>();
+  const schema = z.object({
+    name: z.string().min(1, 'Business name is required'),
+    email: z.string().email('Invalid email address'),
+    website: z.string().url('Invalid website URL')
+  });
+  
+  const form = useForm<z.infer<typeof schema>>({
+    defaultValues: {
+      name: '',
+      email: '',
+      website: ''
+    },
+    resolver: zodResolver(schema)
+  });
 
   const onSubmit = async (data: MerchantFormData) => {
     try {
       setIsSubmitting(true);
-      await submitMerchantApplication(data);
+      console.log('Form data being submitted:', data);
+      
+      const result = await submitMerchantApplication(data);
+      console.log('Submission successful:', result);
+      
       toast.success('Application submitted successfully!');
       form.reset();
     } catch (error) {
-      toast.error('Failed to submit application');
-      console.error(error);
+      console.error('Detailed form submission error:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        type: error?.constructor?.name
+      });
+      
+      let errorMessage = 'Unknown error occurred';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error);
+      }
+      
+      toast.error(`Failed to submit application: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
