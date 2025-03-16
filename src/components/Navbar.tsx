@@ -5,15 +5,25 @@ import { useAdmin } from '@/contexts/AdminContext';
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const { isAdmin } = useAdmin();
 
   return (
     <nav className="fixed w-full bg-white shadow-md z-50">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex justify-between h-16">
+        <div className="flex justify-between h-20"> {/* Reduced from h-24 to h-20 */}
           <div className="flex items-center">
-            <Link to="/" className="text-xl font-bold text-slate-800">
-              Rock Skimmer
+            <Link to="/" className="flex items-center">
+              {imageError ? (
+                <span className="text-xl font-bold text-slate-800">Rock Skimmer</span>
+              ) : (
+                <img 
+                  src="./logo.png" 
+                  alt="Rock Skimmer Logo" 
+                  className="h-16 w-auto" /* Reduced from h-20 to h-16 */
+                  onError={() => setImageError(true)}
+                />
+              )}
             </Link>
           </div>
           

@@ -11,7 +11,7 @@ const Index = () => {
   };
 
   return (
-    <div className="h-screen pt-16 bg-gradient-to-b from-blue-50 to-slate-100 flex flex-col items-center justify-center px-4">
+    <div className="h-screen pt-24 bg-gradient-to-b from-blue-50 to-slate-100 flex flex-col items-center justify-center px-4">
       <h1 className="text-4xl md:text-5xl font-bold text-slate-800 mb-6 text-center">
         Always Wear Protection
       </h1>
