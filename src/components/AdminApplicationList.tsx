@@ -12,7 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const AdminApplicationList = () => {
   const queryClient = useQueryClient();
@@ -65,11 +65,19 @@ const AdminApplicationList = () => {
     staleTime: 0
   });
 
+  // State to track local application status changes
+  const [localApplicationStatus, setLocalApplicationStatus] = useState<Record<number, string>>({});
+  
   const approveMutation = useMutation({
     mutationFn: async (applicationId: number) => {
       try {
         console.log('Approving application:', applicationId);
         await updateMerchantApplicationStatus(applicationId, 'approved');
+        // Update local status immediately
+        setLocalApplicationStatus(prev => ({
+          ...prev,
+          [applicationId]: 'approved'
+        }));
       } catch (error) {
         console.error('Error in approveMutation:', error);
         throw error;
@@ -92,6 +100,11 @@ const AdminApplicationList = () => {
       try {
         console.log('Unapproving application:', applicationId);
         await updateMerchantApplicationStatus(applicationId, 'pending');
+        // Update local status immediately
+        setLocalApplicationStatus(prev => ({
+          ...prev,
+          [applicationId]: 'pending'
+        }));
       } catch (error) {
         console.error('Error in unapproveMutation:', error);
         throw error;
@@ -114,6 +127,11 @@ const AdminApplicationList = () => {
       try {
         console.log('Rejecting application:', applicationId);
         await updateMerchantApplicationStatus(applicationId, 'rejected');
+        // Update local status immediately
+        setLocalApplicationStatus(prev => ({
+          ...prev,
+          [applicationId]: 'rejected'
+        }));
       } catch (error) {
         console.error('Error in rejectMutation:', error);
         throw error;
@@ -162,41 +180,57 @@ const AdminApplicationList = () => {
               <TableCell>{application.merchant.email}</TableCell>
               <TableCell>{application.merchant.website}</TableCell>
               <TableCell>
+                {/* Use local status if available, otherwise use the fetched status */}
                 <Badge variant={
-                  application.status === 'approved' ? 'default' :
-                  application.status === 'rejected' ? 'destructive' :
+                  (localApplicationStatus[application.id] || application.status) === 'approved' ? 'default' :
+                  (localApplicationStatus[application.id] || application.status) === 'rejected' ? 'destructive' :
                   'secondary'
                 }>
-                  {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
+                  {((localApplicationStatus[application.id] || application.status).charAt(0).toUpperCase() + 
+                    (localApplicationStatus[application.id] || application.status).slice(1))}
                 </Badge>
               </TableCell>
               <TableCell>
                 <div className="flex gap-2">
-                  {application.status === 'pending' && (
+                  {/* Use local status for conditional rendering */}
+                  {(localApplicationStatus[application.id] || application.status) === 'pending' && (
                     <>
                       <Button 
                         size="sm" 
                         variant="default"
                         onClick={() => approveMutation.mutate(application.id)}
+                        disabled={approveMutation.isPending}
                       >
-                        Approve
+                        {approveMutation.isPending ? 'Approving...' : 'Approve'}
                       </Button>
                       <Button 
                         size="sm" 
                         variant="destructive"
                         onClick={() => rejectMutation.mutate(application.id)}
+                        disabled={rejectMutation.isPending}
                       >
-                        Reject
+                        {rejectMutation.isPending ? 'Rejecting...' : 'Reject'}
                       </Button>
                     </>
                   )}
-                  {application.status === 'approved' && (
+                  {(localApplicationStatus[application.id] || application.status) === 'approved' && (
                     <Button 
                       size="sm" 
                       variant="secondary"
                       onClick={() => unapproveMutation.mutate(application.id)}
+                      disabled={unapproveMutation.isPending}
                     >
-                      Unapprove
+                      {unapproveMutation.isPending ? 'Unapproving...' : 'Unapprove'}
+                    </Button>
+                  )}
+                  {(localApplicationStatus[application.id] || application.status) === 'rejected' && (
+                    <Button 
+                      size="sm" 
+                      variant="secondary"
+                      onClick={() => unapproveMutation.mutate(application.id)}
+                      disabled={unapproveMutation.isPending}
+                    >
+                      {unapproveMutation.isPending ? 'Unapproving...' : 'Unapprove'}
                     </Button>
                   )}
                 </div>
