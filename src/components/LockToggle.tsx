@@ -1,6 +1,6 @@
 
-import { Lock, Unlock } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useState } from 'react';
 
 interface LockToggleProps {
   isLocked: boolean;
@@ -8,6 +8,8 @@ interface LockToggleProps {
 }
 
 const LockToggle = ({ isLocked, toggleLock }: LockToggleProps) => {
+  const [imageError, setImageError] = useState(false);
+
   return (
     <motion.div
       className={`cursor-pointer flex flex-col items-center justify-center`}
@@ -16,17 +18,22 @@ const LockToggle = ({ isLocked, toggleLock }: LockToggleProps) => {
       whileTap={{ scale: 0.95 }}
     >
       <motion.div
-        className={`p-8 rounded-full ${
-          isLocked ? 'bg-emerald-500' : 'bg-amber-400'
+        className={`p-1.5 rounded-full ${
+          isLocked ? 'bg-emerald-200' : 'bg-amber-200'
         } shadow-lg transition-colors duration-300`}
         initial={{ rotate: 0 }}
         animate={{ rotate: isLocked ? 0 : 180 }}
         transition={{ duration: 0.5 }}
       >
-        {isLocked ? (
-          <Lock className="w-16 h-16 md:w-24 md:h-24 text-white" strokeWidth={1.5} />
+        {imageError ? (
+          <div className="w-16 h-16 md:w-24 md:h-24 bg-white rounded-full" />
         ) : (
-          <Unlock className="w-16 h-16 md:w-24 md:h-24 text-white" strokeWidth={1.5} />
+          <img
+            src="./logo.png"
+            alt="Toggle Logo"
+            className="w-16 h-16 md:w-24 md:h-24"
+            onError={() => setImageError(true)}
+          />
         )}
       </motion.div>
       <p className="mt-4 text-lg font-medium text-slate-700">
