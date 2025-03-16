@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getMerchantApplications, updateMerchantApplicationStatus, approveMerchant } from '@/lib/api';
+import { getMerchantApplications, updateMerchantApplicationStatus, approveMerchant, unapproveMerchant } from '@/lib/api';
 import {
   Table,
   TableBody,
@@ -36,6 +36,25 @@ const AdminApplicationList = () => {
     },
     onError: (error) => {
       toast.error('Failed to approve merchant: ' + error.message);
+    },
+  });
+
+  const unapproveMutation = useMutation({
+    mutationFn: async (applicationId: number) => {
+      const application = applications?.find(app => app.id === applicationId);
+      if (!application) throw new Error('Application not found');
+      
+      // Update application status back to pending
+      await updateMerchantApplicationStatus(applicationId, 'pending');
+      // Unapprove merchant
+      await unapproveMerchant(application.merchant_id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['merchantApplications'] });
+      toast.success('Merchant application unapproved successfully');
+    },
+    onError: (error) => {
+      toast.error('Failed to unapprove merchant: ' + error.message);
     },
   });
 
@@ -103,6 +122,16 @@ const AdminApplicationList = () => {
                         Reject
                       </Button>
                     </>
+                  )}
+                  {application.status === 'approved' && (
+                    <Button 
+                      size="sm" 
+                      variant="secondary"
+                      onClick={() => unapproveMutation.mutate(application.id)}
+                      disabled={unapproveMutation.isPending}
+                    >
+                      Unapprove
+                    </Button>
                   )}
                 </div>
               </TableCell>

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Rock, Merchant, MerchantApplication } from '../types/database';
+import type { MerchantApplication, MerchantAdmin } from '../types/database';
 
 // Rocks
 export const getRocks = async (greenlistedOnly = false) => {
@@ -7,7 +7,7 @@ export const getRocks = async (greenlistedOnly = false) => {
     .from('rocks')
     .select(`
       *,
-      merchant:merchants(*)
+      merchant:merchant_applications(*)
     `);
 
   if (greenlistedOnly) {
@@ -22,7 +22,7 @@ export const getRocks = async (greenlistedOnly = false) => {
 // Merchants
 export const getMerchants = async (approvedOnly = false) => {
   const query = supabase
-    .from('merchants')
+    .from('merchant_applications')
     .select('*');
 
   if (approvedOnly) {
@@ -34,11 +34,15 @@ export const getMerchants = async (approvedOnly = false) => {
   return data;
 };
 
-export const submitMerchantApplication = async (merchantData: Omit<Merchant, 'id' | 'created_at' | 'is_approved'>) => {
+export const submitMerchantApplication = async (merchantData: {
+  name: string;
+  email: string;
+  website: string;
+}) => {
   try {
-    // First, insert the merchant
+    // First, insert the merchant application
     const { data: merchantData_, error: merchantError } = await supabase
-      .from('merchants')
+      .from('merchant_applications')
       .insert([{ 
         ...merchantData, 
         is_approved: false 
@@ -55,14 +59,14 @@ export const submitMerchantApplication = async (merchantData: Omit<Merchant, 'id
       throw new Error('No merchant data returned');
     }
 
-    // Then create the merchant application
+    // Then create the merchant admin entry with the correct column name
     const { data: applicationData, error: applicationError } = await supabase
-      .from('merchant_applications')
+      .from('merchant_admin')
       .insert([{
-        merchant_id: merchantData_.id,
+        merchant_application_id: merchantData_.id,  // Changed from merchant_id
         status: 'pending',
         notes: '',
-        rock_id: null // We need to modify the table to allow null rock_id for initial applications
+        rock_id: null
       }])
       .select('*')
       .single();
@@ -102,7 +106,7 @@ export const submitRockApplication = async (rockData: {
 
   // Then create the application
   const { data: applicationData, error: applicationError } = await supabase
-    .from('merchant_applications')
+    .from('merchant_admin')
     .insert([{
       merchant_id: rockData.merchant_id,
       rock_id: rockData_[0].id,
@@ -118,10 +122,10 @@ export const submitRockApplication = async (rockData: {
 // Get merchant applications
 export const getMerchantApplications = async () => {
   const { data, error } = await supabase
-    .from('merchant_applications')
+    .from('merchant_admin')
     .select(`
       *,
-      merchant:merchants(*)
+      merchant:merchant_applications(*)
     `)
     .order('created_at', { ascending: false });
 
@@ -132,11 +136,34 @@ export const getMerchantApplications = async () => {
 // Update merchant application status
 export const updateMerchantApplicationStatus = async (
   applicationId: number,
-  status: 'approved' | 'rejected',
+  status: 'pending' | 'approved' | 'rejected',
   notes: string = ''
 ) => {
+  const { data: application, error: fetchError } = await supabase
+    .from('merchant_admin')
+    .select('*')
+    .eq('id', applicationId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  // If the application has a rock_id, handle the rock's status
+  if (application.rock_id) {
+    if (status === 'approved') {
+      await supabase
+        .from('rocks')
+        .update({ is_greenlisted: true })
+        .eq('id', application.rock_id);
+    } else {
+      await supabase
+        .from('rocks')
+        .update({ is_greenlisted: false })
+        .eq('id', application.rock_id);
+    }
+  }
+
   const { data, error } = await supabase
-    .from('merchant_applications')
+    .from('merchant_admin')
     .update({ status, notes })
     .eq('id', applicationId)
     .select()
@@ -149,8 +176,21 @@ export const updateMerchantApplicationStatus = async (
 // When a merchant is approved, update their status
 export const approveMerchant = async (merchantId: number) => {
   const { data, error } = await supabase
-    .from('merchants')
+    .from('merchant_applications')
     .update({ is_approved: true })
+    .eq('id', merchantId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+// When a merchant is unapproved, update their status
+export const unapproveMerchant = async (merchantId: number) => {
+  const { data, error } = await supabase
+    .from('merchant_applications')
+    .update({ is_approved: false })
     .eq('id', merchantId)
     .select()
     .single();

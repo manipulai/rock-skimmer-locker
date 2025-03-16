@@ -8,7 +8,7 @@ export interface Rock {
   merchant_id: number | null;
 }
 
-export interface Merchant {
+export interface MerchantApplication {
   id: number;
   name: string;
   email: string;
@@ -17,7 +17,7 @@ export interface Merchant {
   created_at: string;
 }
 
-export interface MerchantApplication {
+export interface MerchantAdmin {
   id: number;
   merchant_id: number;
   rock_id: number;
