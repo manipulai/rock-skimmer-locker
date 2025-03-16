@@ -55,15 +55,17 @@ const MerchantApplicationForm = () => {
         type: error?.constructor?.name
       });
       
-      let errorMessage = 'Unknown error occurred';
+      let errorMessage = 'An error occurred while submitting your application';
       
       if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'object' && error !== null) {
-        errorMessage = JSON.stringify(error);
+        if (error.message.includes('email already exists')) {
+          errorMessage = 'An application with this email address already exists';
+        } else {
+          errorMessage = error.message;
+        }
       }
       
-      toast.error(`Failed to submit application: ${errorMessage}`);
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

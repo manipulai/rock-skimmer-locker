@@ -3,20 +3,36 @@ import type { MerchantApplication, MerchantAdmin } from '../types/database';
 
 // Rocks
 export const getRocks = async (greenlistedOnly = false) => {
-  const query = supabase
-    .from('rocks')
-    .select(`
-      *,
-      merchant:merchant_applications(*)
-    `);
+  console.log('getRocks called with greenlistedOnly:', greenlistedOnly);
+  
+  try {
+    // Simplified query to avoid potential policy recursion
+    const query = supabase
+      .from('rocks')
+      .select('*');
 
-  if (greenlistedOnly) {
-    query.eq('is_greenlisted', true);
+    if (greenlistedOnly) {
+      query.eq('is_greenlisted', true);
+    }
+
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('Supabase query error:', error);
+      throw error;
+    }
+    
+    if (!data) {
+      console.log('No rocks found');
+      return [];
+    }
+    
+    console.log('Rocks fetched:', data);
+    return data;
+  } catch (error) {
+    console.error('Error fetching rocks:', error);
+    throw error;
   }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
 };
 
 // Merchants
@@ -40,61 +56,30 @@ export const submitMerchantApplication = async (merchantData: {
   website: string;
 }) => {
   try {
-    // First, insert the merchant application
-    const { data: merchantData_, error: merchantError } = await supabase
+    // First check if email already exists
+    const { data: existingMerchant } = await supabase
       .from('merchant_applications')
-      .insert([{ 
-        ...merchantData, 
-        is_approved: false 
-      }])
-      .select('*')
+      .select('id')
+      .eq('email', merchantData.email)
       .single();
 
-    if (merchantError) {
-      console.error('Merchant creation error:', merchantError);
-      throw merchantError;
+    if (existingMerchant) {
+      throw new Error('A merchant application with this email already exists');
     }
 
-    if (!merchantData_) {
-      throw new Error('No merchant data returned');
+    // Use a transaction to ensure both operations succeed or fail together
+    const { data, error } = await supabase.rpc('create_merchant_application', {
+      p_name: merchantData.name,
+      p_email: merchantData.email,
+      p_website: merchantData.website
+    });
+
+    if (error) {
+      console.error('Transaction error:', error);
+      throw error;
     }
 
-    // Create a default rock for the merchant
-    const { data: rockData, error: rockError } = await supabase
-      .from('rocks')
-      .insert([{
-        name: "Default Rock",
-        description: "A standard skipping rock",
-        is_greenlisted: false, // Start as not greenlisted
-        image_url: "https://example.com/default-rock.jpg",
-        merchant_id: merchantData_.id
-      }])
-      .select()
-      .single();
-
-    if (rockError) {
-      console.error('Rock creation error:', rockError);
-      throw rockError;
-    }
-
-    // Then create the merchant admin entry
-    const { data: applicationData, error: applicationError } = await supabase
-      .from('merchant_admin')
-      .insert([{
-        merchant_application_id: merchantData_.id,
-        status: 'pending',
-        notes: '',
-        rock_id: rockData.id // Link to the created rock
-      }])
-      .select('*')
-      .single();
-
-    if (applicationError) {
-      console.error('Application creation error:', applicationError);
-      throw applicationError;
-    }
-
-    return { merchant: merchantData_, application: applicationData, rock: rockData };
+    return data;
   } catch (error) {
     console.error('Submission error:', error);
     throw error;
@@ -139,117 +124,301 @@ export const submitRockApplication = async (rockData: {
 };
 // Get merchant applications
 export const getMerchantApplications = async () => {
-  const { data, error } = await supabase
-    .from('merchant_admin')
-    .select(`
-      *,
-      merchant:merchant_applications(*)
-    `)
-    .order('created_at', { ascending: false });
+  console.log('Fetching merchant applications...');
+  
+  try {
+    // Import supabaseAdmin for testing
+    const { supabaseAdmin } = await import('./supabase-admin');
+    
+    // First check if there are any merchant_admin entries using admin client
+    const { count, error: countError } = await supabaseAdmin
+      .from('merchant_admin')
+      .select('*', { count: 'exact', head: true });
+      
+    if (countError) {
+      console.error('Error counting merchant applications:', countError);
+      throw countError;
+    }
+    
+    console.log(`Found ${count} merchant applications in database`);
+    
+    if (count === 0) {
+      console.warn('No merchant applications found in database');
+      return [];
+    }
+    
+    // Fetch the actual data using admin client
+    const { data, error } = await supabaseAdmin
+      .from('merchant_admin')
+      .select(`
+        id,
+        status,
+        notes,
+        created_at,
+        merchant_application_id,
+        merchant:merchant_applications!merchant_application_id (
+          id,
+          name,
+          email,
+          website,
+          is_approved,
+          created_at
+        )
+      `);
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      console.error('Error fetching merchant applications:', error);
+      throw error;
+    }
+
+    console.log('Raw data from database:', data);
+    
+    if (!data || data.length === 0) {
+      console.warn('No merchant applications found in database after query');
+      return [];
+    }
+    
+    // Log each application for debugging
+    data.forEach((app, index) => {
+      console.log(`Application ${index + 1}:`, {
+        id: app.id,
+        status: app.status,
+        merchant_application_id: app.merchant_application_id,
+        merchant: app.merchant
+      });
+    });
+    
+    return data;
+  } catch (error) {
+    console.error('Error in getMerchantApplications:', error);
+    throw error;
+  }
 };
 
-// Update merchant application status
+// Add request validation and sanitization
 export const updateMerchantApplicationStatus = async (
   applicationId: number,
   status: 'pending' | 'approved' | 'rejected',
   notes: string = ''
 ) => {
-  // First get the merchant_admin and related merchant application data
-  const { data: application, error: fetchError } = await supabase
-    .from('merchant_admin')
-    .select(`
-      *,
-      merchant:merchant_applications(*)
-    `)
-    .eq('id', applicationId)
-    .single();
+  try {
+    console.log(`Updating application ${applicationId} to status: ${status}`);
+    
+    // Import supabaseAdmin for testing
+    const { supabaseAdmin } = await import('./supabase-admin');
+    
+    // Add input validation
+    if (!applicationId || !['pending', 'approved', 'rejected'].includes(status)) {
+      throw new Error('Invalid input parameters');
+    }
+    
+    // Sanitize notes input
+    notes = notes.trim().replace(/<[^>]*>/g, '');
+    
+    // First get the merchant_admin and related merchant application data
+    const { data: application, error: fetchError } = await supabaseAdmin
+      .from('merchant_admin')
+      .select(`
+        *,
+        merchant:merchant_applications!merchant_application_id(*)
+      `)
+      .eq('id', applicationId)
+      .single();
 
-  if (fetchError) throw fetchError;
-
-  if (status === 'approved') {
-    // Check if this merchant already has an entry in rocks table
-    const { data: existingRocks, error: rocksError } = await supabase
-      .from('rocks')
-      .select('*')
-      .eq('merchant_application_id', application.merchant_application_id);
-
-    if (rocksError) throw rocksError;
-
-    // If no rocks exist for this merchant, create a default one
-    if (!existingRocks || existingRocks.length === 0) {
-      const { error: insertError } = await supabase
-        .from('rocks')
-        .insert([{
-          name: `${application.merchant.name}'s Default Rock`,
-          description: "A standard skipping rock",
-          is_greenlisted: true,
-          image_url: "https://example.com/default-rock.jpg",
-          merchant_application_id: application.merchant_application_id
-        }]);
-
-      if (insertError) throw insertError;
-    } else {
-      // If rocks exist, update them to be greenlisted
-      const { error: updateError } = await supabase
-        .from('rocks')
-        .update({ is_greenlisted: true })
-        .eq('merchant_application_id', application.merchant_application_id);
-
-      if (updateError) throw updateError;
+    if (fetchError) {
+      console.error('Error fetching application:', fetchError);
+      throw fetchError;
     }
 
-    // Approve the merchant application
-    await approveMerchant(application.merchant_application_id);
-  } else {
-    // When pending or rejected, update existing rocks to be not greenlisted
-    const { error: updateError } = await supabase
-      .from('rocks')
-      .update({ is_greenlisted: false })
-      .eq('merchant_application_id', application.merchant_application_id);
+    console.log('Application data:', application);
 
-    if (updateError) throw updateError;
+    if (status === 'approved') {
+      // Check if this merchant already has an entry in rocks table
+      const { data: existingRocks, error: rocksError } = await supabaseAdmin
+        .from('rocks')
+        .select('*')
+        .eq('merchant_application_id', application.merchant_application_id);
 
-    // Unapprove the merchant
-    await unapproveMerchant(application.merchant_application_id);
+      if (rocksError) {
+        console.error('Error checking existing rocks:', rocksError);
+        throw rocksError;
+      }
+
+      // If no rocks exist for this merchant, create a default one
+      if (!existingRocks || existingRocks.length === 0) {
+        console.log('Creating default rock for merchant:', application.merchant.name);
+        const { data: newRock, error: insertError } = await supabaseAdmin
+          .from('rocks')
+          .insert([{
+            name: `${application.merchant.name}'s Default Rock`,
+            description: "A premium skipping rock with perfect balance",
+            is_greenlisted: true,
+            image_url: "https://example.com/default-rock.jpg",
+            merchant_application_id: application.merchant_application_id
+          }])
+          .select();
+
+        if (insertError) {
+          console.error('Error inserting new rock:', insertError);
+          throw insertError;
+        }
+        
+        console.log('Created new rock:', newRock);
+      } else {
+        // If rocks exist, update them to be greenlisted
+        console.log('Updating existing rocks to greenlisted');
+        const { error: updateError } = await supabaseAdmin
+          .from('rocks')
+          .update({ is_greenlisted: true })
+          .eq('merchant_application_id', application.merchant_application_id);
+
+        if (updateError) {
+          console.error('Error updating rocks:', updateError);
+          throw updateError;
+        }
+      }
+
+      // Approve the merchant application
+      await approveMerchantAdmin(application.merchant_application_id);
+    } else {
+      // When pending or rejected, update existing rocks to be not greenlisted
+      console.log('Updating rocks to not greenlisted');
+      const { error: updateError } = await supabaseAdmin
+        .from('rocks')
+        .update({ is_greenlisted: false })
+        .eq('merchant_application_id', application.merchant_application_id);
+
+      if (updateError) {
+        console.error('Error updating rocks:', updateError);
+        throw updateError;
+      }
+
+      // Unapprove the merchant
+      await unapproveMerchantAdmin(application.merchant_application_id);
+    }
+
+    // Update the merchant_admin status
+    console.log('Updating merchant_admin status to:', status);
+    const { data, error } = await supabaseAdmin
+      .from('merchant_admin')
+      .update({ status, notes })
+      .eq('id', applicationId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating merchant_admin status:', error);
+      throw error;
+    }
+    
+    console.log('Successfully updated merchant application status');
+    return data;
+  } catch (error) {
+    console.error('Error in updateMerchantApplicationStatus:', error);
+    throw error;
   }
-
-  // Update the merchant_admin status
-  const { data, error } = await supabase
-    .from('merchant_admin')
-    .update({ status, notes })
-    .eq('id', applicationId)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
 };
 
 // When a merchant is approved, update their status
-export const approveMerchant = async (merchantId: number) => {
-  const { data, error } = await supabase
-    .from('merchant_applications')
-    .update({ is_approved: true })
-    .eq('id', merchantId)
-    .select()
-    .single();
+export const approveMerchantAdmin = async (merchantId: number) => {
+  try {
+    const { supabaseAdmin } = await import('./supabase-admin');
+    
+    const { data, error } = await supabaseAdmin
+      .from('merchant_applications')
+      .update({ is_approved: true })
+      .eq('id', merchantId)
+      .select()
+      .single();
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      console.error('Error approving merchant:', error);
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error in approveMerchantAdmin:', error);
+    throw error;
+  }
 };
 
 // When a merchant is unapproved, update their status
-export const unapproveMerchant = async (merchantId: number) => {
-  const { data, error } = await supabase
-    .from('merchant_applications')
-    .update({ is_approved: false })
-    .eq('id', merchantId)
-    .select()
-    .single();
+export const unapproveMerchantAdmin = async (merchantId: number) => {
+  try {
+    const { supabaseAdmin } = await import('./supabase-admin');
+    
+    const { data, error } = await supabaseAdmin
+      .from('merchant_applications')
+      .update({ is_approved: false })
+      .eq('id', merchantId)
+      .select()
+      .single();
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      console.error('Error unapproving merchant:', error);
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error in unapproveMerchantAdmin:', error);
+    throw error;
+  }
+};
+
+export const testSecurityRules = async () => {
+  try {
+    const results: {
+      adminRoles: any;
+      rocks: any;
+      merchantApplications: any;
+      auditLogs: any;
+      errors: {
+        adminRoles?: string;
+        rocks?: string;
+        merchantApplications?: string;
+        auditLogs?: string;
+      };
+    } = {
+      adminRoles: null,
+      rocks: null,
+      merchantApplications: null,
+      auditLogs: null,
+      errors: {}
+    };
+
+    // Test admin roles access
+    const { data: adminRoles, error: adminError } = await supabase
+      .from('admin_roles')
+      .select('*');
+    results.adminRoles = adminRoles;
+    if (adminError) results.errors.adminRoles = adminError.message;
+
+    // Test rocks access
+    const { data: rocks, error: rocksError } = await supabase
+      .from('rocks')
+      .select('*');
+    results.rocks = rocks;
+    if (rocksError) results.errors.rocks = rocksError.message;
+
+    // Test merchant applications access
+    const { data: applications, error: appError } = await supabase
+      .from('merchant_applications')
+      .select('*');
+    results.merchantApplications = applications;
+    if (appError) results.errors.merchantApplications = appError.message;
+
+    // Test audit logs access
+    const { data: auditLogs, error: auditError } = await supabase
+      .from('audit_logs')
+      .select('*');
+    results.auditLogs = auditLogs;
+    if (auditError) results.errors.auditLogs = auditError.message;
+
+    return results;
+  } catch (error) {
+    console.error('Security test error:', error);
+    return { error: error.message };
+  }
 };

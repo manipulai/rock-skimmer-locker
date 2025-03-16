@@ -1,101 +1,211 @@
-import { supabase } from './supabase';
-
-const sampleRocks = [
-  {
-    name: "Smooth Slate Skipper",
-    description: "Perfect flat surface with ideal weight distribution. A competition-grade throwing stone.",
-    is_greenlisted: true,
-    image_url: "https://example.com/slate-skipper.jpg",
-    merchant_id: 1
-  },
-  {
-    name: "River Round",
-    description: "Naturally polished by years of river flow. Medium weight with excellent aerodynamics.",
-    is_greenlisted: true,
-    image_url: "https://example.com/river-round.jpg",
-    merchant_id: 1
-  },
-  {
-    name: "Beach Pebble Pro",
-    description: "Small but mighty. Ideal for beginners learning the perfect throw.",
-    is_greenlisted: true,
-    image_url: "https://example.com/beach-pebble.jpg",
-    merchant_id: 2
-  },
-  {
-    name: "Granite Glider",
-    description: "Heavy but well-balanced. Best for experienced skimmers.",
-    is_greenlisted: false,
-    image_url: "https://example.com/granite-glider.jpg",
-    merchant_id: 2
-  },
-  {
-    name: "Quartzite Queen",
-    description: "Beautiful and functional. Creates impressive splash patterns.",
-    is_greenlisted: true,
-    image_url: "https://example.com/quartzite-queen.jpg",
-    merchant_id: 3
-  },
-  {
-    name: "Limestone Launcher",
-    description: "Light and fast. Perfect for distance records.",
-    is_greenlisted: false,
-    image_url: "https://example.com/limestone-launcher.jpg",
-    merchant_id: 3
-  }
-];
-
-const sampleMerchants = [
-  {
-    name: "Rocky's Premium Skippers",
-    email: "sales@rockyskippers.com",
-    website: "https://rockyskippers.com",
-    is_approved: true
-  },
-  {
-    name: "Lakeside Stone Supply",
-    email: "info@lakesidestones.com",
-    website: "https://lakesidestones.com",
-    is_approved: true
-  },
-  {
-    name: "Beach Pebble Co",
-    email: "contact@beachpebble.co",
-    website: "https://beachpebble.co",
-    is_approved: false
-  }
-];
+import { supabaseAdmin } from './supabase-admin';
 
 export const seedData = async () => {
   try {
-    // Clear existing data
-    await supabase.from('rocks').delete().neq('id', 0);
-    await supabase.from('merchants').delete().neq('id', 0);
+    console.log('Starting to seed data...');
+    
+    // Sample merchant data
+    const sampleMerchants = [
+      {
+        name: 'Rock Shop 1',
+        email: 'shop1@example.com',
+        website: 'https://rockshop1.com',
+        is_approved: false
+      },
+      {
+        name: 'Rock Shop 2',
+        email: 'shop2@example.com',
+        website: 'https://rockshop2.com',
+        is_approved: false
+      },
+      {
+        name: 'Rock Shop 3',
+        email: 'shop3@example.com',
+        website: 'https://rockshop3.com',
+        is_approved: false
+      },
+      {
+        name: 'Premium Rocks',
+        email: 'premium@rocks.com',
+        website: 'https://premiumrocks.com',
+        is_approved: false
+      },
+      {
+        name: 'Skimmer Supply Co',
+        email: 'info@skimmersupply.com',
+        website: 'https://skimmersupply.com',
+        is_approved: false
+      }
+    ];
+    
+    // First, get all existing merchant applications
+    const { data: existingMerchants, error: fetchError } = await supabaseAdmin
+      .from('merchant_applications')
+      .select('id, email, name');
+      
+    if (fetchError) {
+      console.error('Error fetching existing merchants:', fetchError);
+      return { 
+        success: false, 
+        message: 'Failed to fetch existing merchants' 
+      };
+    }
+    
+    console.log('Existing merchants:', existingMerchants);
+    
+    // Create a map of email to merchant ID for quick lookup
+    const emailToMerchantId = {};
+    existingMerchants?.forEach(merchant => {
+      emailToMerchantId[merchant.email] = merchant.id;
+    });
+    
+    // Filter out merchants that already exist
+    const newMerchants = sampleMerchants.filter(merchant => 
+      !emailToMerchantId[merchant.email]
+    );
+    
+    let merchantIds = [...(existingMerchants?.map(m => m.id) || [])];
+    
+    // Insert new merchants if any
+    if (newMerchants.length > 0) {
+      console.log(`Adding ${newMerchants.length} new merchant applications`);
+      
+      const { data: insertedMerchants, error: merchantError } = await supabaseAdmin
+        .from('merchant_applications')
+        .insert(newMerchants)
+        .select();
 
-    // Insert merchants first
-    const { data: merchantData, error: merchantError } = await supabase
-      .from('merchants')
-      .insert(sampleMerchants)
-      .select();
-
-    if (merchantError) throw merchantError;
-
-    // Map merchant IDs to rocks
-    const rocksWithMerchantIds = sampleRocks.map((rock, index) => ({
-      ...rock,
-      merchant_id: merchantData[Math.floor(index / 2)].id // Assign 2 rocks per merchant
+      if (merchantError) {
+        console.error('Error inserting merchant applications:', merchantError);
+        return { 
+          success: false, 
+          message: 'Failed to insert merchant applications' 
+        };
+      }
+      
+      console.log('Successfully inserted merchant applications:', insertedMerchants);
+      
+      // Add newly inserted merchant IDs to our list
+      merchantIds = [...merchantIds, ...(insertedMerchants?.map(m => m.id) || [])];
+      
+      // Update our email to ID map
+      insertedMerchants?.forEach(merchant => {
+        emailToMerchantId[merchant.email] = merchant.id;
+      });
+    }
+    
+    // For testing purposes, we'll delete existing admin applications and recreate them
+    console.log('Deleting existing admin applications for testing...');
+    const { error: deleteError } = await supabaseAdmin
+      .from('merchant_admin')
+      .delete()
+      .neq('id', 0); // Delete all records
+      
+    if (deleteError) {
+      console.error('Error deleting existing admin applications:', deleteError);
+      // Continue anyway
+    }
+    
+    // Use all merchant IDs for creating admin applications
+    const merchantIdsNeedingAdminApps = merchantIds;
+    
+    if (merchantIdsNeedingAdminApps.length === 0) {
+      console.log('No merchants found to create applications for');
+      return {
+        success: false,
+        message: 'No merchants found to create applications for',
+        data: []
+      };
+    }
+    
+    // Create admin applications for merchants that don't have them
+    const adminApplications = merchantIdsNeedingAdminApps.map((merchantId, index) => ({
+      status: index % 3 === 0 ? 'pending' : index % 3 === 1 ? 'approved' : 'rejected',
+      notes: `Sample application ${index + 1}`,
+      merchant_application_id: merchantId
     }));
+    
+    console.log('Creating admin applications:', adminApplications);
+    
+    const { data: applications, error: insertError } = await supabaseAdmin
+      .from('merchant_admin')
+      .insert(adminApplications)
+      .select(`
+        id,
+        status,
+        notes,
+        created_at,
+        merchant_application_id,
+        merchant:merchant_applications!merchant_application_id (
+          id,
+          name,
+          email,
+          website,
+          is_approved,
+          created_at
+        )
+      `);
 
-    // Insert rocks
-    const { error: rockError } = await supabase
-      .from('rocks')
-      .insert(rocksWithMerchantIds);
+    if (insertError) {
+      console.error('Error inserting admin applications:', insertError);
+      return { 
+        success: false, 
+        message: 'Failed to insert merchant admin applications' 
+      };
+    }
 
-    if (rockError) throw rockError;
+    console.log('Successfully inserted admin applications:', applications);
+    
+    // Update merchant is_approved status for approved applications
+    const approvedMerchantIds = applications
+      .filter(app => app.status === 'approved')
+      .map(app => app.merchant_application_id);
+      
+    if (approvedMerchantIds.length > 0) {
+      console.log('Updating approved merchants:', approvedMerchantIds);
+      
+      const { error: updateError } = await supabaseAdmin
+        .from('merchant_applications')
+        .update({ is_approved: true })
+        .in('id', approvedMerchantIds);
+        
+      if (updateError) {
+        console.error('Error updating merchant approval status:', updateError);
+      }
+    }
+    
+    // Create default rocks for approved merchants
+    for (const app of applications.filter(a => a.status === 'approved')) {
+      if (app.merchant && typeof app.merchant === 'object' && 'name' in app.merchant) {
+        const merchantName = app.merchant.name as string;
+        console.log('Creating default rock for approved merchant:', merchantName);
+        
+        const { error: rockError } = await supabaseAdmin
+          .from('rocks')
+          .insert([{
+            name: `${merchantName}'s Default Rock`,
+            description: "A premium skipping rock with perfect balance",
+            is_greenlisted: true,
+            image_url: "https://example.com/default-rock.jpg",
+            merchant_application_id: app.merchant_application_id
+          }]);
+        
+        if (rockError) {
+          console.error('Error creating default rock:', rockError);
+        }
+      }
+    }
 
-    return { success: true, message: 'Data seeded successfully' };
+    return { 
+      success: true, 
+      message: `Added ${applications?.length} merchant applications`,
+      data: applications 
+    };
   } catch (error) {
     console.error('Error seeding data:', error);
-    return { success: false, message: error.message };
+    return { 
+      success: false, 
+      message: error instanceof Error ? error.message : 'Unknown error occurred' 
+    };
   }
 };

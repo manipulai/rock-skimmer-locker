@@ -11,7 +11,17 @@ interface RockListProps {
 const RockList = ({ isGreenlisted }: RockListProps) => {
   const { data: rocks, isLoading, error } = useQuery({
     queryKey: ['rocks', isGreenlisted],
-    queryFn: () => getRocks(isGreenlisted)
+    queryFn: async () => {
+      try {
+        console.log('Fetching rocks with isGreenlisted:', isGreenlisted);
+        const data = await getRocks(isGreenlisted);
+        console.log('Fetched rocks:', data);
+        return data;
+      } catch (err) {
+        console.error('Error fetching rocks:', err);
+        throw err;
+      }
+    }
   });
 
   if (isLoading) {
@@ -19,7 +29,19 @@ const RockList = ({ isGreenlisted }: RockListProps) => {
   }
 
   if (error) {
-    return <div className="text-center text-red-500">Error loading rocks</div>;
+    return (
+      <div className="text-center text-red-500">
+        Error loading rocks: {error.message}
+      </div>
+    );
+  }
+
+  if (!rocks || rocks.length === 0) {
+    return (
+      <div className="text-center text-slate-500">
+        No rocks found. {isGreenlisted ? 'Try viewing all rocks instead of just greenlisted ones.' : ''}
+      </div>
+    );
   }
 
   return (

@@ -5,7 +5,7 @@ export interface Rock {
   is_greenlisted: boolean;
   image_url: string;
   created_at: string;
-  merchant_id: number | null;
+  merchant_application_id: number | null;
 }
 
 export interface MerchantApplication {
@@ -19,9 +19,10 @@ export interface MerchantApplication {
 
 export interface MerchantAdmin {
   id: number;
-  merchant_id: number;
-  rock_id: number;
+  merchant_application_id: number;
+  rock_id: number | null;
   status: 'pending' | 'approved' | 'rejected';
   notes: string;
   created_at: string;
+  merchant: MerchantApplication;
 }

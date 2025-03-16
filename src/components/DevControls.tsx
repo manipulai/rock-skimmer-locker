@@ -1,5 +1,4 @@
 import { Button } from '@/components/ui/button';
-import { seedData } from '@/lib/seedData';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useAdmin } from '@/contexts/AdminContext';
@@ -12,18 +11,14 @@ const DevControls = () => {
     return null;
   }
 
-  const handleSeed = async () => {
-    const result = await seedData();
-    if (result.success) {
-      toast.success('Sample data seeded successfully');
-    } else {
-      toast.error('Failed to seed data: ' + result.message);
-    }
-  };
-
   const handleAdminToggle = () => {
     setIsAdmin(!isAdmin);
     toast.success(`Admin mode ${!isAdmin ? 'enabled' : 'disabled'}`);
+    
+    // If enabling admin mode, navigate to admin page
+    if (!isAdmin) {
+      navigate('/admin');
+    }
   };
 
   return (
@@ -38,13 +33,6 @@ const DevControls = () => {
         }`}
       >
         👑 Admin: {isAdmin ? 'ON' : 'OFF'}
-      </Button>
-      <Button
-        onClick={handleSeed}
-        variant="outline"
-        className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-yellow-300"
-      >
-        🌱 Seed Data
       </Button>
     </div>
   );
