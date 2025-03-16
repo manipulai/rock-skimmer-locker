@@ -22,13 +22,8 @@ const AdminApplicationList = () => {
 
   const approveMutation = useMutation({
     mutationFn: async (applicationId: number) => {
-      const application = applications?.find(app => app.id === applicationId);
-      if (!application) throw new Error('Application not found');
-      
-      // Update application status
+      // Just call updateMerchantApplicationStatus which now handles everything
       await updateMerchantApplicationStatus(applicationId, 'approved');
-      // Approve merchant
-      await approveMerchant(application.merchant_id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['merchantApplications'] });
@@ -41,13 +36,8 @@ const AdminApplicationList = () => {
 
   const unapproveMutation = useMutation({
     mutationFn: async (applicationId: number) => {
-      const application = applications?.find(app => app.id === applicationId);
-      if (!application) throw new Error('Application not found');
-      
-      // Update application status back to pending
+      // Just call updateMerchantApplicationStatus which now handles everything
       await updateMerchantApplicationStatus(applicationId, 'pending');
-      // Unapprove merchant
-      await unapproveMerchant(application.merchant_id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['merchantApplications'] });
